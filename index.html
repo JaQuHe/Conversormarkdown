@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF a Markdown | Conversor Web</title>
+  <!-- PDF.js (Motor de extracción) y Marked.js (Vista previa Markdown) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-hover: #334155;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --radius: 12px;
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .badge {
+      font-size: 0.75rem;
+      background: rgba(59, 130, 246, 0.15);
+      color: #60a5fa;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+
+    main {
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Zona de carga */
+    .drop-zone {
+      background-color: var(--surface);
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragover {
+      border-color: var(--primary);
+      background-color: rgba(59, 130, 246, 0.08);
+    }
+
+    .drop-zone svg {
+      width: 44px;
+      height: 44px;
+      color: var(--primary);
+      margin-bottom: 0.75rem;
+    }
+
+    .drop-zone p {
+      font-size: 1.05rem;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+    }
+
+    .drop-zone span {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    /* Opciones de formato */
+    .options-bar {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.9rem;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      accent-color: var(--primary);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    /* Barra de progreso y estado */
+    .status-container {
+      display: none;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+    }
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.875rem;
+      margin-bottom: 0.5rem;
+      color: var(--text-muted);
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 8px;
+      background-color: var(--bg);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background-color: var(--primary);
+      transition: width 0.2s ease;
+    }
+
+    /* Panel de resultados */
+    .workspace {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      flex: 1;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .tabs {
+      display: flex;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.25rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: 0.15s ease;
+    }
+
+    .tab-btn.active {
+      background-color: var(--primary);
+      color: #fff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      color: var(--text);
+      transition: 0.15s ease;
+    }
+
+    .btn:hover {
+      background-color: var(--surface-hover);
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      border-color: var(--primary);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+    }
+
+    .editor-container {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      min-height: 460px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    textarea#mdOutput {
+      width: 100%;
+      flex: 1;
+      min-height: 460px;
+      background-color: transparent;
+      color: var(--text);
+      border: none;
+      padding: 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+    }
+
+    #mdPreview {
+      display: none;
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      max-height: 600px;
+    }
+
+    /* Estilos de la vista previa Markdown */
+    #mdPreview h1, #mdPreview h2, #mdPreview h3 {
+      margin-top: 1.25rem;
+      margin-bottom: 0.6rem;
+      color: #fff;
+    }
+    #mdPreview h1 { font-size: 1.6rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+    #mdPreview h2 { font-size: 1.3rem; }
+    #mdPreview h3 { font-size: 1.1rem; }
+    #mdPreview p { margin-bottom: 0.9rem; color: #e2e8f0; }
+    #mdPreview ul, #mdPreview ol { margin-left: 1.5rem; margin-bottom: 0.9rem; }
+    #mdPreview hr { border: 0; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+    #mdPreview code { background: var(--bg); padding: 0.15rem 0.4rem; border-radius: 4px; font-family: var(--font-mono); }
+
+    .alert-warning {
+      display: none;
+      background-color: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      padding: 1rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <h1>PDF → Markdown</h1>
+      <span class="badge">100% Local · GitHub Pages</span>
+    </div>
+    <span style="font-size: 0.85rem; color: var(--text-muted);">Tus archivos nunca salen de tu navegador</span>
+  </header>
+
+  <main>
+    <!-- Zona Drop -->
+    <div class="drop-zone" id="dropZone">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 16v-8m0 0-3 3m3-3 3 3M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1" />
+      </svg>
+      <p>Arrastra tu archivo PDF aquí o haz clic para seleccionarlo</p>
+      <span>Soporta documentos multipágina con detección automática de títulos y listas</span>
+      <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden />
+    </div>
+
+    <!-- Configuración de extracción -->
+    <div class="options-bar">
+      <div class="checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="optHeadings" checked />
+          Detectar títulos por tamaño de fuente
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="optPageBreaks" checked />
+          Separar páginas con <code>---</code>
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="optMergeLines" checked />
+          Unir saltos de línea en párrafos
+        </label>
+      </div>
+      <button class="btn" id="reprocessBtn" style="display: none;">Reprocesar PDF</button>
+    </div>
+
+    <!-- Progreso -->
+    <div class="status-container" id="statusContainer">
+      <div class="status-header">
+        <span id="statusText">Procesando documento...</span>
+        <span id="statusPercent">0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+    </div>
+
+    <!-- Alerta PDF escaneado -->
+    <div class="alert-warning" id="scanWarning">
+      <strong>Advertencia:</strong> No se encontró texto seleccionable en este PDF. Es probable que sea un documento escaneado como imagen (requiere OCR).
+    </div>
+
+    <!-- Área de edición y descarga -->
+    <section class="workspace" id="workspace">
+      <div class="toolbar">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="code">Código Markdown</button>
+          <button class="tab-btn" data-tab="preview">Vista Previa</button>
+        </div>
+        <div class="actions">
+          <button class="btn" id="copyBtn">Copiar Markdown</button>
+          <button class="btn btn-primary" id="downloadBtn">Descargar .md</button>
+        </div>
+      </div>
+
+      <div class="editor-container">
+        <textarea id="mdOutput" spellcheck="false" placeholder="El resultado en Markdown aparecerá aquí..."></textarea>
+        <div id="mdPreview"></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Configurar Worker de PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    const dropZone = document.getElementById("dropZone");
+    const fileInput = document.getElementById("fileInput");
+    const statusContainer = document.getElementById("statusContainer");
+    const statusText = document.getElementById("statusText");
+    const statusPercent = document.getElementById("statusPercent");
+    const progressFill = document.getElementById("progressFill");
+    const scanWarning = document.getElementById("scanWarning");
+    const workspace = document.getElementById("workspace");
+    const mdOutput = document.getElementById("mdOutput");
+    const mdPreview = document.getElementById("mdPreview");
+    const copyBtn = document.getElementById("copyBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const reprocessBtn = document.getElementById("reprocessBtn");
+
+    let currentFile = null;
+    let outputFileName = "documento.md";
+
+    // Eventos Drag & Drop
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    reprocessBtn.addEventListener("click", () => {
+      if (currentFile) handleFile(currentFile);
+    });
+
+    // Pestañas Código / Vista previa
+    document.querySelectorAll(".tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+
+        if (btn.dataset.tab === "preview") {
+          mdPreview.innerHTML = marked.parse(mdOutput.value);
+          mdOutput.style.display = "none";
+          mdPreview.style.display = "block";
+        } else {
+          mdPreview.style.display = "none";
+          mdOutput.style.display = "block";
+        }
+      });
+    });
+
+    // Copiar al portapapeles
+    copyBtn.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(mdOutput.value);
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = "¡Copiado!";
+      setTimeout(() => (copyBtn.textContent = originalText), 1800);
+    });
+
+    // Descargar archivo .md
+    downloadBtn.addEventListener("click", () => {
+      const blob = new Blob([mdOutput.value], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = outputFileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    async function handleFile(file) {
+      if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+        alert("Por favor selecciona un archivo PDF válido.");
+        return;
+      }
+
+      currentFile = file;
+      outputFileName = file.name.replace(/\.pdf$/i, "") + ".md";
+      reprocessBtn.style.display = "inline-flex";
+      scanWarning.style.display = "none";
+      statusContainer.style.display = "block";
+      progressFill.style.width = "0%";
+      statusPercent.textContent = "0%";
+      statusText.textContent = `Leyendo "${file.name}"...`;
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const totalPages = pdf.numPages;
+
+        const detectHeadings = document.getElementById("optHeadings").checked;
+        const addPageBreaks = document.getElementById("optPageBreaks").checked;
+        const mergeLines = document.getElementById("optMergeLines").checked;
+
+        const allFontSizes = [];
+        const pagesLines = [];
+
+        // 1. Extraer líneas y tamaños de fuente por página
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          const percent = Math.round((pageNum / totalPages) * 100);
+          progressFill.style.width = `${percent}%`;
+          statusPercent.textContent = `${percent}%`;
+          statusText.textContent = `Procesando página ${pageNum} de ${totalPages}...`;
+
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const lines = groupItemsIntoLines(textContent.items);
+
+          lines.forEach((line) => {
+            if (line.text.trim().length > 0) {
+              allFontSizes.push(line.fontSize);
+            }
+          });
+
+          pagesLines.push(lines);
+        }
+
+        // 2. Calcular tamaño de fuente base (mediana del documento)
+        const baseFontSize = calculateMedian(allFontSizes) || 12;
+
+        // 3. Reconstruir Markdown
+        let markdownPages = [];
+
+        pagesLines.forEach((lines) => {
+          let pageMd = [];
+          let currentParagraph = "";
+
+          lines.forEach((line, idx) => {
+            const text = line.text.trim();
+            if (!text) return;
+
+            const ratio = line.fontSize / baseFontSize;
+            const isBullet = /^[•▪◦\-*]\s+/.test(text);
+            const cleanBullet = text.replace(/^[•▪◦\-*]\s+/, "- ");
+
+            let headingPrefix = "";
+            if (detectHeadings && text.length < 140 && !isBullet) {
+              if (ratio >= 1.55) headingPrefix = "# ";
+              else if (ratio >= 1.28) headingPrefix = "## ";
+              else if (ratio >= 1.12 && line.isBold) headingPrefix = "### ";
+            }
+
+            if (headingPrefix) {
+              if (currentParagraph) {
+                pageMd.push(currentParagraph.trim());
+                currentParagraph = "";
+              }
+              pageMd.push(`${headingPrefix}${text}`);
+            } else if (isBullet) {
+              if (currentParagraph) {
+                pageMd.push(currentParagraph.trim());
+                currentParagraph = "";
+              }
+              pageMd.push(cleanBullet);
+            } else if (mergeLines) {
+              const prevLine = idx > 0 ? lines[idx - 1] : null;
+              const verticalGap = prevLine ? Math.abs(prevLine.y - line.y) : 0;
+              const isNewParagraph = verticalGap > line.fontSize * 1.65;
+
+              if (isNewParagraph && currentParagraph) {
+                pageMd.push(currentParagraph.trim());
+                currentParagraph = text;
+              } else {
+                // Unir palabras partidas por guion al final de línea
+                if (currentParagraph.endsWith("-")) {
+                  currentParagraph = currentParagraph.slice(0, -1) + text;
+                } else {
+                  currentParagraph += (currentParagraph ? " " : "") + text;
+                }
+              }
+            } else {
+              pageMd.push(text);
+            }
+          });
+
+          if (currentParagraph) {
+            pageMd.push(currentParagraph.trim());
+          }
+
+          if (pageMd.length > 0) {
+            markdownPages.push(pageMd.join("\n\n"));
+          }
+        });
+
+        const finalMarkdown = markdownPages.join(addPageBreaks ? "\n\n---\n\n" : "\n\n");
+
+        statusText.textContent = `Completado (${totalPages} páginas procesadas).`;
+        workspace.style.display = "flex";
+        mdOutput.value = finalMarkdown;
+
+        // Volver a pestaña de código al cargar nuevo archivo
+        document.querySelector('.tab-btn[data-tab="code"]').click();
+
+        if (!finalMarkdown.trim()) {
+          scanWarning.style.display = "block";
+        }
+      } catch (err) {
+        console.error(err);
+        statusText.textContent = "Error al leer el PDF.";
+        alert("No se pudo procesar el archivo PDF: " + err.message);
+      }
+    }
+
+    // Agrupa fragmentos de texto de PDF.js en líneas visuales ordenadas de arriba a abajo
+    function groupItemsIntoLines(items) {
+      const mapped = items
+        .filter((item) => item.str && item.str.trim().length > 0)
+        .map((item) => ({
+          str: item.str,
+          x: item.transform[4],
+          y: item.transform[5],
+          fontSize: Math.abs(item.transform[3]) || item.height || 12,
+          isBold: /bold/i.test(item.fontName || ""),
+        }));
+
+      // Ordenar de arriba hacia abajo (Y descendente) y de izquierda a derecha (X ascendente)
+      mapped.sort((a, b) => {
+        if (Math.abs(b.y - a.y) > 4) return b.y - a.y;
+        return a.x - b.x;
+      });
+
+      const lines = [];
+      mapped.forEach((item) => {
+        const lastLine = lines[lines.length - 1];
+        if (lastLine && Math.abs(lastLine.y - item.y) <= 4) {
+          lastLine.items.push(item);
+          lastLine.fontSize = Math.max(lastLine.fontSize, item.fontSize);
+          lastLine.isBold = lastLine.isBold || item.isBold;
+        } else {
+          lines.push({
+            y: item.y,
+            fontSize: item.fontSize,
+            isBold: item.isBold,
+            items: [item],
+          });
+        }
+      });
+
+      return lines.map((line) => {
+        line.items.sort((a, b) => a.x - b.x);
+        return {
+          y: line.y,
+          fontSize: line.fontSize,
+          isBold: line.isBold,
+          text: line.items.map((i) => i.str).join(" ").replace(/\s+/g, " "),
+        };
+      });
+    }
+
+    function calculateMedian(values) {
+      if (values.length === 0) return 0;
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      return sorted.length % 2 !== 0
+        ? sorted[mid]
+        : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+  </script>
+</body>
+</html>
